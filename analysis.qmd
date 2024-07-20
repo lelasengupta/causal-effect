@@ -1,0 +1,60 @@
+---
+title: "Causal Effect"
+author: "Lela"
+format: html
+execute:
+  echo: false
+---
+
+```{r}
+#| message: false
+library(tidyverse)
+library(primer.data)
+library(brms)
+library(tidybayes)
+library(gtsummary)
+```
+
+```{r}
+ch6 <- trains |>
+  select(att_end, treatment)
+```
+
+```{r}
+#| cache: TRUE
+fit_gauss <- brm(formula = att_end ~ treatment,
+    data = ch6,
+    family = gaussian(),
+    refresh = 0,
+    silent = 2,
+    seed = 9)
+```
+
+```{r}
+ndata <- tibble(treatment = c("Treated", "Control"))
+```
+
+```{r}
+fit_gauss |>
+add_epred_draws(newdata = ndata) |>
+select(treatment, .draw, .epred) |>
+pivot_wider(
+  id_cols = .draw, names_from = treatment, values_from = .epred) |>
+mutate(causal_effect = Treated - Control) |>
+select(- .draw) |>
+ggplot(aes(x = causal_effect)) +
+geom_histogram(aes(y = after_stat(count / sum(count))),
+               bins = 100) +
+scale_y_continuous(labels = scales::percent_format()) +
+theme_classic() +
+labs(title = "Posterior for Average Treatement Effect",
+     subtitle = "Exposure to Spanish-speakers shifts immigration attitudes rightward",
+     x = "Difference in Attitude",
+     y = "Probability")
+```
+
+Using a survey of Boston-area commuters in 2012, we seek to estimate the causal effect of exposure to Spanish-speakers and attitudes towards immigration among adults in similar cities in 2024. There is some concern that, due to shifts in the political landscape, perceptions of immigration have changed since our data was collected. We used a linear function of treatment to model attitude towards immigration on a 3 to 15 integer scale. The average causal effect of the treatment was about 1.5, with a 95% confidence interval between 2.5 and 0.5. Exposure to Spanish-speakers made people more conservative on immigration. The 1.5 effect is close to the 1.7 distance between Democrats and Republicans, meaning that we would estimate that a treated Democrat could become as conservative as an average Republican. 
+
+```{r}
+tbl_regression(fit_gauss, intercept = TRUE)
+```
